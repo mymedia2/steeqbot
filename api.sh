@@ -83,38 +83,29 @@ function tg::start_bot {
     | sed 's/^\s*/\\(/;s/\s*,\s*/\\|/g;s/\s*$/\\)/')
   sleep 1
 
-  local last_update_id=0
+  local next_update_id=0
   while true; do
-    local updates=$(tg::api_call getUpdates offset="${last_update_id}" \
+    local updates=$(tg::api_call getUpdates offset="${next_update_id}" \
       timeout=100 allowed_updates="${supported_updates_types}")
     local incoming_updates=$(echo "${updates}" | jshon -l)
     for (( i = 0; i < incoming_updates; i++ )); do
-      local current_update_id=$(echo "${updates}" | jshon -e $i -e update_id)
-      (( last_update_id = current_update_id + 1 ))
-
-      # Обработка команд
-      if echo "${updates}" \
+      local cInput=$(echo "${updates}" \
         | jshon -Q -e $i -e message -e text -u \
-        | grep -q "^/${supported_commands_list}"; then
-        local cmd=$(echo "${updates}" \
-          | jshon -e $i -e message -e text -u \
-          | sed 's,/'"${supported_commands_list}"',\1,')
-        echo "${updates}" | jshon -e $i -e message | "process_${cmd}_command"
-        continue
-      fi
-
-      # Обработка сообщений по типу
+        | sed -nz '\!^/\<'"${supported_commands_list}"'\>!{s,/\(\w*\).*,\1,;p}')
       local content_type=$(echo "${updates}" \
         | jshon -Q -e $i -e message -k \
         | grep "${supported_message_types}")
-      if [ -n "${content_type}" ]; then
-        echo "${updates}" | jshon -e $i -e message | "process_${content_type}"
-        continue
-      fi
-
-      # Обработка прочих обновлений
       local incoming=$(echo "${updates}" | jshon -e $i -k | grep -v update_id)
-      echo "${updates}" | jshon -e $i -e "${incoming}" | "process_${incoming}"
+
+      if [ -n "${cInput}" ]; then  # обработка команд
+        local function_name="process_${cInput}_command"
+      elif [ -n "${content_type}" ]; then  # обработка сообщений по типу
+        local function_name="process_${content_type}"
+      else  # обработка прочих обновлений
+        local function_name="process_${incoming}"
+      fi
+      echo "${updates}" | jshon -e $i -e "${incoming}" | "${function_name}"
+      let next_update_id=$(echo "${updates}" | jshon -e $i -e update_id)+1
     done
   done
 }
