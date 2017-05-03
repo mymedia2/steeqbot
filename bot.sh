@@ -37,9 +37,6 @@ function api_call {
   fi
 }
 
-sleep 1
-api_call getMe | jshon -e username -u
-
 function process_message {
   local message=$(cat)
   local msg_text=$(echo "${message}" | jshon -e text -u)
@@ -47,15 +44,68 @@ function process_message {
   api_call sendMessage text="${msg_text}" chat_id="${msg_chat}" >/dev/null
 }
 
-last_update_id=0
-while true; do
-  updates=$(api_call getUpdates offset="${last_update_id}" timeout=100 \
-    allowed_updates='["message","inline_query","chosen_inline_result"]')
-  incoming_updates=$(echo "${updates}" | jshon -l)
-  for (( i = 0; i < incoming_updates; i++ )); do
-    current_update_id=$(echo "${updates}" | jshon -e $i -e update_id)
-    (( last_update_id = current_update_id + 1 ))
-    update_type=$(echo "${updates}" | jshon -e $i -k | grep -v update_id)
-    echo "${updates}" | jshon -e $i -e "${update_type}" | "process_${update_type}"
+function process_inline_query {
+  echo inline query
+  cat
+}
+
+function process_start_command {
+  echo start command
+  cat
+}
+
+function process_list_command {
+  echo list command
+  cat
+}
+
+function process_sticker {
+  echo new sticker
+  cat
+}
+
+function start_bot {
+  local supported_updates_types=$(echo "${1:-messages}" \
+    | sed 's/^\s*/["/;s/\s*,\s*/","/g;s/\s*$/"]/')
+  local supported_commands_list=$(echo "$2" \
+    | sed 's/^\s*/\\(/;s/\s*,\s*/\\|/g;s/\s*$/\\)/')
+  local supported_message_types=$(echo "$3" \
+    | sed 's/^\s*/\\(/;s/\s*,\s*/\\|/g;s/\s*$/\\)/')
+  sleep 1
+
+  local last_update_id=0
+  while true; do
+    local updates=$(api_call getUpdates offset="${last_update_id}" timeout=100 \
+      allowed_updates="${supported_updates_types}")
+    local incoming_updates=$(echo "${updates}" | jshon -l)
+    for (( i = 0; i < incoming_updates; i++ )); do
+      local current_update_id=$(echo "${updates}" | jshon -e $i -e update_id)
+      (( last_update_id = current_update_id + 1 ))
+
+      # Обработка команд
+      if echo "${updates}" \
+        | jshon -Q -e $i -e message -e text -u \
+        | grep -q "^/${supported_commands_list}"; then
+        local cmd=$(echo "${updates}" \
+          | jshon -e $i -e message -e text -u \
+          | sed 's,/'"${supported_commands_list}"',\1,')
+        echo "${updates}" | jshon -e $i -e message | "process_${cmd}_command"
+        continue
+      fi
+
+      # Обработка сообщений по типу
+      local content_type=$(echo "${updates}" \
+        | jshon -Q -e $i -e message -k \
+        | grep "${supported_message_types}")
+      if [ -n "${content_type}" ]; then
+        echo "${updates}" | jshon -e $i -e message | "process_${content_type}"
+        continue
+      fi
+
+      # Обработка прочих обновлений
+      local incoming=$(echo "${updates}" | jshon -e $i -k | grep -v update_id)
+      echo "${updates}" | jshon -e $i -e "${incoming}" | "process_${incoming}"
+    done
   done
-done
+}
+start_bot "message,inline_query,chosen_inline_result" "start,list" "sticker"
