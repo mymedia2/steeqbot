@@ -78,9 +78,9 @@ function tg::start_bot {
   local supported_updates_types=$(echo "${1:-messages}" \
     | sed 's/^\s*/["/;s/\s*,\s*/","/g;s/\s*$/"]/')
   local supported_commands_list=$(echo "$2" \
-    | sed 's/^\s*/\\(/;s/\s*,\s*/\\|/g;s/\s*$/\\)/')
+    | sed 's/^\s*/(/;s/\s*,\s*/|/g;s/\s*$/)/')
   local supported_message_types=$(echo "$3" \
-    | sed 's/^\s*/\\(/;s/\s*,\s*/\\|/g;s/\s*$/\\)/')
+    | sed 's/^\s*/(/;s/\s*,\s*/|/g;s/\s*$/)/')
   sleep 1
 
   local next_update_id=0
@@ -91,10 +91,10 @@ function tg::start_bot {
     for (( i = 0; i < incoming_updates; i++ )); do
       local cInput=$(echo "${updates}" \
         | jshon -Q -e $i -e message -e text -u \
-        | sed -nz '\!^/\<'"${supported_commands_list}"'\>!{s,/\(\w*\).*,\1,;p}')
+        | sed -rnz '\!^/\<'"${supported_commands_list}"'\>!{s,/(\w*).*,\1,;p}')
       local content_type=$(echo "${updates}" \
         | jshon -Q -e $i -e message -k \
-        | grep "${supported_message_types}")
+        | egrep "${supported_message_types}")
       local incoming=$(echo "${updates}" | jshon -e $i -k | grep -v update_id)
 
       if [ -n "${cInput}" ]; then  # обработка команд
