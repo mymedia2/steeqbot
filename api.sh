@@ -28,8 +28,8 @@ coproc _tg_socket_proxy {
 #   ост. ~ последовательность аргументов вида 'имя=значение'
 #
 # Результат в формате JSON печатается на стандартный вывод. В случае ошибки
-# возвращается её код. При непустой переменной NO_ERROR в поток ошибок не
-# выводятся диагностические сообщения.
+# возвращается её код. При непустой переменной DEBUG в поток ошибок выводятся
+# диагностические сообщения.
 #
 # Пример:
 #   tg::api_call sendMessage text="Hello world!" chat_id=42 >/dev/null
@@ -48,7 +48,7 @@ function tg::api_call {
   local status=$(echo "${data}" | jshon -e ok)
   if [ "${status}" = "true" ]; then
     echo "${data}" | jshon -e result
-  elif [ -z "${NO_ERROR}" ]; then
+  elif [ -n "${DEBUG}" ]; then
     local code=$(echo "${data}" | jshon -e error_code)
     local desc=$(echo "${data}" | jshon -e description -u)
     echo "Error ${code}: ${desc}" >&2
@@ -109,3 +109,8 @@ function tg::start_bot {
     done
   done
 }
+
+if [ -z "${BOT_TOKEN}" ]; then
+  echo "Не задан ключ доступа к Telegram API" >&2
+  exit 1
+fi
