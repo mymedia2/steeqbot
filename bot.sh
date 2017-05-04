@@ -5,7 +5,7 @@ source api.sh
 
 function db_query {
   echo "$@;" >&2
-  sqlite stickers.db "$@"
+  sqlite3 stickers.db "$@"
 }
 
 function process_message {
@@ -46,9 +46,9 @@ function process_sticker {
     fi
     tg::api_call sendMessage text="${msg}" chat_id="${user_id}" >/dev/null
   else
-    db_query "REPLACE INTO history VALUES (${user_id}, ${chat_id}, ${file_id},
-      ifnull((SELECT counter + 1 FROM history
-              WHERE user_id = ${user_id} AND file_id = ${file_id}), 1))"
+    db_query "
+      REPLACE INTO history (user_id, chat_id, file_id, counter, last_used)
+      VALUES (${user_id}, ${chat_id}, ${file_id}, 1, strftime('%s', 'now'))"
   fi
 }
 
@@ -57,7 +57,7 @@ function process_inline_query {
   local query_id=$(echo "${update}" | jshon -e id -u)
   local user_id=$(echo "${update}" | jshon -e from -e id)
   local stickers_json=[$(
-    db_query "SELECT file_id FROM serchies WHERE user_id = ${user_id}
+    db_query "SELECT file_id FROM finding WHERE user_id = ${user_id}
               ORDER BY counter DESC LIMIT 50" \
       | sed 's/.*/{"type":"sticker","id":"\0","sticker_file_id":"\0"}/
              2~1s/.*/,\0/')]
@@ -75,10 +75,8 @@ function process_chosen_inline_result {
   local result=$(cat)
   local file_id=$(echo "${result}" | jshon -e result_id)
   local user_id=$(echo "${result}" | jshon -e from -e id)
-  db_query "REPLACE INTO history (user_id, file_id, counter)
-            SELECT user_id, file_id, counter + 1 FROM history
-            WHERE user_id = ${user_id} AND file_id = ${file_id}
-            UNION ALL SELECT ${user_id}, ${file_id}, 1 LIMIT 1"
+  db_query "REPLACE INTO history (user_id, file_id, counter, last_used)
+            VALUES (${user_id}, ${file_id}, 1, strftime('%s', 'now'))"
 }
 
 tg::start_bot "message,inline_query,chosen_inline_result" "start,list" "sticker"
