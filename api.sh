@@ -58,6 +58,7 @@ function tg::api_call {
 
 # Запускает обработку входящих сообщений. Вызывает функции с названием вида
 # process_* в соответствии с принятым типом сообщения и заданными параметрами.
+# Всем функциям на стандартный ввод подаётся запрашиваемый объект обновления.
 # Каждое сообщение обрабатывается лишь единожды. Управление не возвращается.
 #
 # Параметры:
@@ -71,8 +72,8 @@ function tg::api_call {
 #        Необязательный, приоритетнее $1.
 #   $3 ~ Список обрабатываемых типов сообщений через запятую. Возможные типы:
 #        text, audio, document, game, photo, sticker, video, voice, contact,
-#        location, venue, reply (пока не реализовано), service (не реализовано).
-#        При получении указанного сообщения вызывается функция process_тип.
+#        location, venue, reply, service (пока не реализовано). При получении
+#        указанного сообщения вызывается функция process_тип.
 #
 function tg::start_bot {
   local supported_updates_types=$(echo "${1:-messages}" \
@@ -80,7 +81,7 @@ function tg::start_bot {
   local supported_commands_list=$(echo "$2" \
     | sed 's/^\s*/(/;s/\s*,\s*/|/g;s/\s*$/)/')
   local supported_message_types=$(echo "$3" \
-    | sed 's/^\s*/(/;s/\s*,\s*/|/g;s/\s*$/)/')
+    | sed 's/^\s*/^(/;s/\s*,\s*/|/g;s/\s*$/)$/')
   sleep 1
 
   local next_update_id=0
@@ -101,6 +102,10 @@ function tg::start_bot {
         local function_name="process_${cInput}_command"
       elif [ -n "${content_type}" ]; then  # обработка сообщений по типу
         local function_name="process_${content_type}"
+      elif echo "${updates}" \
+          | jshon -Q -e $i -e message -e reply_to_message >/dev/null &&
+          [[ "$3" =~ "reply" ]]; then  # обработка ответов
+        local function_name="process_reply"
       else  # обработка прочих обновлений
         local function_name="process_${incoming}"
       fi

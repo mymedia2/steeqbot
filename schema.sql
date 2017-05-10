@@ -37,3 +37,10 @@ CREATE VIEW stickers AS
 WITH t AS (SELECT DISTINCT file_id, words FROM history)
 SELECT file_id, group_concat(words) AS description
 FROM t WHERE words != '' GROUP BY file_id;
+
+/* Пользователи, которые в текущий момент собираются дать описание стикера */
+CREATE TABLE states (
+    user_id INTEGER NOT NULL PRIMARY KEY
+  , file_id TEXT NOT NULL
+  , last_activity_time INTEGER NOT NULL DEFAULT ( strftime('%s', 'now') )
+);

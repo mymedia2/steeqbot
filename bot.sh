@@ -37,17 +37,28 @@ function process_sticker {
     if sql::query "SELECT COUNT(*) FROM history WHERE user_id = ${user_id}
                    AND file_id = ${file_id}" | grep -q 0; then
       if (( RANDOM % 2 )); then
-        local msg="Ого какой интересный стикер! 👍"
+        local msg="Ого какой интересный стикер!"
       else
-        local msg="Ого какой красивый стикер! 👍"
+        local msg="Ого какой красивый стикер!"
+      fi
+      if (( RANDOM % 2 )); then
+        msg+=" А что на нём изображено?"
+      else
+        msg+=" А что тут изображено?"
       fi
     else
       local msg="О! А этот стикер уже знаю 😃"
     fi
-    tg::api_call sendMessage text="${msg}" chat_id="${user_id}" >/dev/null
+    tg::api_call sendMessage text="${msg}" chat_id="${user_id}" \
+      reply_markup='{"force_reply":true}' >/dev/null
+    sql::query "INSERT INTO history (user_id, file_id, sendings_tally)
+                VALUES (${user_id}, ${file_id}, 0);
+                REPLACE INTO states (user_id, file_id)
+                VALUES (${user_id}, ${file_id})"
+  else
+    sql::query "INSERT INTO history (user_id, file_id)
+                VALUES (${user_id}, ${file_id})"
   fi
-  sql::query "INSERT INTO history (user_id, file_id, sendings_tally)
-              VALUES (${user_id}, ${file_id}, 0)"
 }
 
 function process_inline_query {
@@ -79,4 +90,18 @@ function process_chosen_inline_result {
               VALUES (${user_id}, ${file_id}, ${words})"
 }
 
-tg::start_bot "message,inline_query,chosen_inline_result" "start,help" "sticker"
+function process_reply {
+  local data=$(cat)
+  local user_id=$(echo "${data}" | jshon -e from -e id)
+  local description=$(echo "${data}" | jshon -e text)
+  if echo "${data}" | jshon -e chat -e type | grep -q private &&
+      [ -n "${description}" ] && sql::query "
+        INSERT INTO history (user_id, words, sendings_tally, file_id)
+        VALUES (${user_id}, ${description}, 0,
+        (SELECT file_id FROM states WHERE user_id = ${user_id}))"; then
+    tg::api_call sendMessage text="Понятно 🙂" chat_id="${user_id}" >/dev/null
+  fi
+}
+
+tg::start_bot "message,inline_query,chosen_inline_result" "start,help" \
+  "sticker,reply"
