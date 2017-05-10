@@ -14,9 +14,9 @@ function process_message {
 function process_start_command {
   local chat=$(jshon -e chat -e id)
   local msg="\
-Привет! Я могу помочь найти тебе подходящий стикер именно в тот момент, \
-когда он очень нужен. Чтобы вызвать меня, просто набери моё имя в строке \
-сообщения, а затем введи cвой запрос."
+Привет! Я могу помочь найти тебе подходящий стикер именно в тот момент, когда \
+он очень нужен. Чтобы вызвать меня, просто набери моё имя в строке сообщения, \
+а затем введи cвой запрос."
   local kbd='{"inline_keyboard":[[
     {"text":"↪️ Опробовать...","switch_inline_query":""} ]]}'
   tg::api_call sendMessage text="${msg}" chat_id="${chat}" \
@@ -25,7 +25,12 @@ function process_start_command {
 
 function process_help_command {
   local chat=$(jshon -e from -e id)
-  local msg="В разработке..."
+  local msg="\
+Я – бот-помощник в поиске стикеров. Просто напиши мне, какой стикер тебя \
+интересует, и я попытаюсь найти его. Но помни, пока мне известно очень мало \
+стикеров, поэтому поиск может быть нерезультативным. Если тебя расстраивает \
+эта ситуация, отправь мне в личку свои любимые стикеры, и со временем я их \
+проиндексирую."
   tg::api_call sendMessage text="${msg}" chat_id="${chat}" >/dev/null
 }
 
@@ -90,6 +95,22 @@ function process_chosen_inline_result {
               VALUES (${user_id}, ${file_id}, ${words})"
 }
 
+function process_text {
+  local query=$(cat)
+  echo "${query}" | jshon -e chat -e type | grep -q private || return 0
+  local user_id=$(echo "${query}" | jshon -e from -e id)
+  local pattern=$(echo "${query}" | jshon -e text -u | sed 's/"/""/g')
+  local file_id=$(sql::query "
+    SELECT file_id FROM history WHERE words LIKE \"%${pattern}%\"
+    ORDER BY sendings_tally DESC, user_id != ${user_id} LIMIT 1")
+  if [ -z "${file_id}" ]; then
+    tg::api_call sendMessage chat_id="${user_id}" \
+      text="К сожалению, по этому запросу ничего не нашлось 😔" >/dev/null
+  else
+    tg::api_call sendSticker chat_id="${user_id}" sticker="${file_id}" >/dev/null
+  fi
+}
+
 function process_reply {
   local data=$(cat)
   echo "${data}" | jshon -e chat -e type | grep -q private || return 0
@@ -116,4 +137,4 @@ function process_reply {
 }
 
 tg::start_bot "message,inline_query,chosen_inline_result" "start,help" \
-  "sticker,reply"
+  "text,sticker,reply"

@@ -100,12 +100,12 @@ function tg::start_bot {
 
       if [ -n "${cInput}" ]; then  # обработка команд
         local function_name="process_${cInput}_command"
-      elif [ -n "${content_type}" ]; then  # обработка сообщений по типу
-        local function_name="process_${content_type}"
       elif echo "${updates}" \
           | jshon -Q -e $i -e message -e reply_to_message >/dev/null &&
           [[ "$3" =~ "reply" ]]; then  # обработка ответов
         local function_name="process_reply"
+      elif [ -n "${content_type}" ]; then  # обработка сообщений по типу
+        local function_name="process_${content_type}"
       else  # обработка прочих обновлений
         local function_name="process_${incoming}"
       fi
