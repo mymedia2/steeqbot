@@ -92,14 +92,26 @@ function process_chosen_inline_result {
 
 function process_reply {
   local data=$(cat)
+  echo "${data}" | jshon -e chat -e type | grep -q private || return 0
   local user_id=$(echo "${data}" | jshon -e from -e id)
   local description=$(echo "${data}" | jshon -e text)
-  if echo "${data}" | jshon -e chat -e type | grep -q private &&
-      [ -n "${description}" ] && sql::query "
+  local file_id=$(echo "${data}" \
+    | jshon -Q -e reply_to_message -e sticker -e file_id)
+  if [ -n "${description}" ]; then
+    local res=true
+    if [ -n "${file_id}" ]; then
+      sql::query "
+        INSERT INTO history (user_id, file_id, words, sendings_tally)
+        VALUES (${user_id}, ${file_id}, ${description}, 0)"
+    else
+      sql::query "
         INSERT INTO history (user_id, words, sendings_tally, file_id)
         VALUES (${user_id}, ${description}, 0,
-        (SELECT file_id FROM states WHERE user_id = ${user_id}))"; then
-    tg::api_call sendMessage text="Понятно 🙂" chat_id="${user_id}" >/dev/null
+        (SELECT file_id FROM states WHERE user_id = ${user_id}))" || res=false
+    fi
+    if [ "${res}" = true ]; then
+      tg::api_call sendMessage text="Понятно 🙂" chat_id="${user_id}" >/dev/null
+    fi
   fi
 }
 
