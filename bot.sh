@@ -59,8 +59,8 @@ function process_sticker {
   local user_id=$(echo "${message}" | jshon -e from -e id)
   local file_id=$(echo "${message}" | jshon -e sticker -e file_id)
   if echo "${message}" | jshon -e chat -e type | grep -q private; then
-    if sql::query "SELECT COUNT(*) FROM history WHERE user_id = ${user_id}
-                   AND file_id = ${file_id}" | grep -q 0; then
+    if sql::query "SELECT count(*) FROM history WHERE file_id = ${file_id}" \
+        | grep -q 0; then
       if (( RANDOM % 2 )); then
         local msg="Ого, какой интересный стикер!"
       else
@@ -92,13 +92,15 @@ function process_inline_query {
   local user_id=$(echo "${update}" | jshon -e from -e id)
   local pattern=$(echo "${update}" | jshon -e query -u | sed 's/"/""/g')
   local stickers_json=[$(sql::query "
-    WITH r AS (SELECT *, 1 AS category FROM history
-               WHERE words LIKE \"%${pattern}%\"
-               ORDER BY sendings_tally DESC, user_id != ${user_id}),
-         m AS (SELECT *, 0 AS category FROM history WHERE words = ''
-               ORDER BY sendings_tally DESC, user_id != ${user_id}
+    WITH r AS (SELECT *, user_id != ${user_id} AS owner_flag, 1 AS category
+               FROM history WHERE words LIKE \"%${pattern,,}%\"
+               ORDER BY owner_flag DESC, sendings_tally DESC),
+         m AS (SELECT *, 0 AS category FROM history
+               WHERE file_id NOT IN (SELECT file_id FROM history WHERE words != '')
+                 AND '${pattern}' != ''
+               ORDER BY sendings_tally DESC
                LIMIT (SELECT count(*) FROM r) / 3)
-    SELECT DISTINCT file_id FROM r UNION SELECT DISTINCT file_id FROM m
+    SELECT DISTINCT file_id FROM r UNION ALL SELECT DISTINCT file_id FROM m
     LIMIT 50" \
       | sed 's/.*/{"type":"sticker","id":"\0","sticker_file_id":"\0"}/
              2~1s/.*/,\0/')]
@@ -112,7 +114,7 @@ function process_chosen_inline_result {
   local user_id=$(echo "${result}" | jshon -e from -e id)
   local words=$(echo "${result}" | jshon -e query -u | sql::to_literal)
   sql::query "INSERT INTO history (user_id, file_id, words)
-              VALUES (${user_id}, ${file_id}, ${words})"
+              VALUES (${user_id}, ${file_id}, ${words,,})"
 }
 
 function process_text {
@@ -121,8 +123,8 @@ function process_text {
   local user_id=$(echo "${query}" | jshon -e from -e id)
   local pattern=$(echo "${query}" | jshon -e text -u | sed 's/"/""/g')
   local file_id=$(sql::query "
-    SELECT file_id FROM history WHERE words LIKE \"%${pattern}%\"
-    ORDER BY sendings_tally DESC, user_id != ${user_id} LIMIT 1")
+    SELECT file_id FROM history WHERE words LIKE \"%${pattern,,}%\"
+    ORDER BY user_id != ${user_id}, sendings_tally DESC LIMIT 1")
   if [ -z "${file_id}" ]; then
     tg::api_call sendMessage chat_id="${user_id}" \
       text="К сожалению, по этому запросу ничего не нашлось 😔" >/dev/null
@@ -143,11 +145,11 @@ function process_reply {
     if [ -n "${file_id}" ]; then
       sql::query "
         INSERT INTO history (user_id, file_id, words, sendings_tally)
-        VALUES (${user_id}, ${file_id}, ${description}, 0)"
+        VALUES (${user_id}, ${file_id}, ${description,,}, 0)"
     else
       sql::query "
         INSERT INTO history (user_id, words, sendings_tally, file_id)
-        VALUES (${user_id}, ${description}, 0,
+        VALUES (${user_id}, ${description,,}, 0,
         (SELECT file_id FROM states WHERE user_id = ${user_id}))" || res=false
     fi
     if [ "${res}" = true ]; then
