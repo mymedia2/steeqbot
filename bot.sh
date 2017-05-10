@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Depends: jshon netcat-openbsd curl openssl sqlite3
+
 set -o errexit pipefail
 source api.sh
 source database.sh
@@ -23,58 +25,58 @@ function process_start_command {
 
 function process_help_command {
   local chat=$(jshon -e from -e id)
-  local msg="\
-Пока только реализована возможность запоминания любимых стикеров. Просто \
-отправь мне стикеры, которые тебе нравятся, и я буду предлагать их тебе при \
-поиске.  Список сортируется по частоте использования. Можно добавить меня в \
-групповой чат, и я буду учитывать использование стикеров там."
+  local msg="В разработке..."
   tg::api_call sendMessage text="${msg}" chat_id="${chat}" >/dev/null
 }
 
 function process_sticker {
   local message=$(cat)
   local user_id=$(echo "${message}" | jshon -e from -e id)
-  local chat_id=$(echo "${message}" | jshon -e chat -e id)
   local file_id=$(echo "${message}" | jshon -e sticker -e file_id)
   if echo "${message}" | jshon -e chat -e type | grep -q private; then
-    if sql::query "INSERT INTO favorites VALUES (${user_id}, ${file_id})"; then
-      local msg="ок!"
+    if sql::query "SELECT COUNT(*) FROM history WHERE user_id = ${user_id}
+                   AND file_id = ${file_id}" | grep -q 0; then
+      if (( RANDOM % 2 )); then
+        local msg="Ого какой интересный стикер! 👍"
+      else
+        local msg="Ого какой красивый стикер! 👍"
+      fi
     else
-      local msg="Этот стикер уже есть в наборе"
+      local msg="О! А этот стикер уже знаю 😃"
     fi
     tg::api_call sendMessage text="${msg}" chat_id="${user_id}" >/dev/null
-  else
-    sql::query "
-      REPLACE INTO history (user_id, chat_id, file_id, counter, last_used)
-      VALUES (${user_id}, ${chat_id}, ${file_id}, 1, strftime('%s', 'now'))"
   fi
+  sql::query "INSERT INTO history (user_id, file_id, sendings_tally)
+              VALUES (${user_id}, ${file_id}, 0)"
 }
 
 function process_inline_query {
   local update=$(cat)
   local query_id=$(echo "${update}" | jshon -e id -u)
   local user_id=$(echo "${update}" | jshon -e from -e id)
-  local stickers_json=[$(
-    sql::query "SELECT file_id FROM finding WHERE user_id = ${user_id}
-                ORDER BY counter DESC LIMIT 50" \
+  local pattern=$(echo "${update}" | jshon -e query -u | sed 's/"/""/g')
+  local stickers_json=[$(sql::query "
+    WITH r AS (SELECT *, 1 AS category FROM history
+               WHERE words LIKE \"%${pattern}%\"
+               ORDER BY sendings_tally DESC, user_id != ${user_id}),
+         m AS (SELECT *, 0 AS category FROM history WHERE words = ''
+               ORDER BY sendings_tally DESC, user_id != ${user_id}
+               LIMIT (SELECT count(*) FROM r) / 3)
+    SELECT DISTINCT file_id FROM r UNION SELECT DISTINCT file_id FROM m
+    LIMIT 50" \
       | sed 's/.*/{"type":"sticker","id":"\0","sticker_file_id":"\0"}/
              2~1s/.*/,\0/')]
-  if [ "${stickers_json}" = "[]" ]; then
-    local swp=(
-      switch_pm_text="Задай свой набор стикеров..."
-      switch_pm_parameter="new_set"
-    )
-  fi
-  tg::api_call answerInlineQuery inline_query_id="${query_id}" cache_time=1 \
-    results="${stickers_json}" is_personal=true "${swp[@]}" >/dev/null
+  tg::api_call answerInlineQuery inline_query_id="${query_id}" \
+    results="${stickers_json}" cache_time=1 is_personal=true >/dev/null
 }
 
 function process_chosen_inline_result {
   local result=$(cat)
   local file_id=$(echo "${result}" | jshon -e result_id)
   local user_id=$(echo "${result}" | jshon -e from -e id)
-  sql::query "REPLACE INTO history (user_id, file_id, counter, last_used)
-              VALUES (${user_id}, ${file_id}, 1, strftime('%s', 'now'))"
+  local words=$(echo "${result}" | jshon -e query -u | sql::to_literal)
+  sql::query "INSERT INTO history (user_id, file_id, words)
+              VALUES (${user_id}, ${file_id}, ${words})"
 }
 
 tg::start_bot "message,inline_query,chosen_inline_result" "start,help" "sticker"

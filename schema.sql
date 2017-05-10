@@ -1,45 +1,39 @@
 /* Схема БД, используемая ботом (требуется SQLite v3) */
 
-CREATE TABLE favorites (
-  user_id NOT NULL,
-  file_id NOT NULL,
-  UNIQUE (user_id, file_id)
-);
-
+/* Количество отправок определённого стикера определённым пользователем по
+ * определённому поисковому запросу (если не известен, то пустая строка).
+ * Предполагается, что в поле words содержит только буквы, цифры или пробел.
+ * Также содержится время последней отправки. Используется для сортировки
+ * результатов поиска. Типы указываются в качестве подсказки. */
 CREATE TABLE history (
-  user_id   NOT NULL,
-  chat_id,
-  file_id   NOT NULL,
-  counter   NOT NULL,
-  last_used NOT NULL,
-  UNIQUE (user_id, chat_id, file_id)
+    user_id INTEGER NOT NULL  /* ид отправителя */
+  , file_id TEXT NOT NULL  /* ид стикера */
+  , words TEXT NOT NULL DEFAULT ''
+  , sendings_tally INTEGER NOT NULL DEFAULT 1
+  , last_used_time INTEGER NOT NULL DEFAULT ( strftime('%s', 'now') )
+  , UNIQUE (user_id, file_id, words)
 );
 
-  CREATE VIEW finding AS
-  SELECT f.user_id, f.file_id, SUM(ifnull(h.counter, 0)) AS counter
-    FROM favorites AS f
-         LEFT JOIN history AS h
-         ON f.user_id = h.user_id
-            AND f.file_id = h.file_id
-GROUP BY f.user_id, f.file_id;
-
-CREATE TRIGGER sending_of_existing
+/* Этот триггер используется для более удобного обновления счётчиков в таблице
+ * истории. При попытке вставить конфликтующую запись, на самом деле
+ * увеличивается счётчик в уже существующей записи. Если таковой нет, вставка
+ * разрешается. */
+CREATE TRIGGER sending
 BEFORE INSERT ON history
 BEGIN
-  /* не трогаем недавно изменённую запись */
-  SELECT CASE
-    WHEN NEW.last_used - (SELECT MAX(last_used)
-                            FROM history
-                           WHERE user_id = NEW.user_id
-                             AND file_id = NEW.file_id) <= 1
-    THEN RAISE(IGNORE) END;
   /* обновляем старую запись */
   UPDATE history
-     SET counter = counter + NEW.counter
-       , last_used = NEW.last_used
-   WHERE user_id = NEW.user_id
-     AND (chat_id = NEW.chat_id OR chat_id IS NULL AND NEW.chat_id IS NULL)
-     AND file_id = NEW.file_id;
-  /* и ничего не вставляем */
-  SELECT CASE WHEN CHANGES() > 0 THEN RAISE(IGNORE) END;
+  SET sendings_tally = sendings_tally + NEW.sendings_tally
+    , last_used_time = NEW.last_used_time
+  WHERE user_id = NEW.user_id
+    AND file_id = NEW.file_id
+    AND words = NEW.words;
+  /* и ничего не вставляем, если запись уже была */
+  SELECT CASE WHEN changes() > 0 THEN RAISE (IGNORE) END;
 END;
+
+/* Доступные стикеры, известные боту (представление пока не используется) */
+CREATE VIEW stickers AS
+WITH t AS (SELECT DISTINCT file_id, words FROM history)
+SELECT file_id, group_concat(words) AS description
+FROM t WHERE words != '' GROUP BY file_id;
