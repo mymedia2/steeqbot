@@ -25,7 +25,7 @@
 set -o errexit pipefail
 
 # Внутренние объекты для реализации постоянного соединения.
-_tg_socket_file="/var/tmp/$0.socket"
+_tg_socket_file="/var/tmp/$0-$$.socket"
 coproc _tg_tls_service {
   while true; do
     openssl s_client -quiet -connect "api.telegram.org:443" \
@@ -37,6 +37,11 @@ coproc _tg_socket_proxy {
     nc -lU "${_tg_socket_file}" <&${_tg_tls_service[0]} >&${_tg_tls_service[1]}
   done
 }
+function _tg_atexit {
+    kill "${_tg_socket_proxy_PID}" "${_tg_tls_service_PID}"
+    rm -f "${_tg_socket_file}"
+}
+trap _tg_atexit EXIT
 
 # Вызывает метод Telegram API, используя уже установленное постоянное
 # HTTPS-соединение с сервером.
@@ -100,7 +105,11 @@ function tg::start_bot {
     | sed 's/^\s*/(/;s/\s*,\s*/|/g;s/\s*$/)/')
   local supported_message_types=$(echo "$3" \
     | sed 's/^\s*/^(/;s/\s*,\s*/|/g;s/\s*$/)$/')
-  sleep 1
+
+  if [ -n "${DEBUG}" ]; then
+    local myname=@$(tg::api_call getMe | jshon -e username -u)
+    echo $(date -Iseconds) "Бот ${myname} запущен" >&2
+  fi
 
   local next_update_id=0
   while true; do
