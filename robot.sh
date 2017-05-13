@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# RolterBot — поисковик стикеров в Telegram
+# Поисковик стикеров в Telegram
 # Copyright (c) Гурьев Николай, 2017
 #
 # Эта программа является свободным программным обеспечением: Вы можете
@@ -50,7 +50,7 @@ function process_help_command {
 эта ситуация, отправь мне в личку свои любимые стикеры, и со временем я их \
 проиндексирую.
 Кроме того, я представляю из себя свободное ПО, и мой код доступен на условиях \
-GNU/AGPL github.com/mymedia2/rolterbot"
+GNU/AGPL github.com/mymedia2/steeqbot"
   tg::api_call sendMessage text="${msg}" chat_id="${chat}" >/dev/null
 }
 
