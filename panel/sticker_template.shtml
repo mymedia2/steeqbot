@@ -1,0 +1,16 @@
+<figure>
+  <div class="sticker">
+    <img src="image.cgi?file_id=<!--#echo var="sticker_id" -->"
+         alt="<!--#echo var="tags" -->"/>
+  </div>
+  <figcaption>
+    <form class="detele-form" method="POST"
+          action="delete.cgi?file_id=<!--#echo var="sticker_id" -->">
+      <input type="submit" value="x"/>
+    </form>
+    <form class="edit-form" method="POST" enctype="text/plain"
+          action="edit.cgi?file_id=<!--#echo var="sticker_id" -->">
+      <input name="tags" value="<!--#echo var="tags" -->"/>
+    </form>
+  </figcaption>
+</figure>

@@ -63,3 +63,8 @@ CREATE TABLE states (
   , file_id TEXT NOT NULL
   , last_activity_time INTEGER NOT NULL DEFAULT ( strftime('%s', 'now') )
 );
+
+CREATE VIEW stickers_shtml AS
+SELECT printf('<!--#set var="sticker_id" value="%s" var="tags" value="%s" -->
+  <!--#include file="sticker_template.shtml" -->', file_id, description)
+FROM stickers;

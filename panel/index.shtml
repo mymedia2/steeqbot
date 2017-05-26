@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Административная панель</title>
+    <link rel="stylesheet" href="styles.css"/>
+  </head>
+  <body>
+    <header>
+      <h1>Административная панель</h1>
+    </header>
+    <main>
+      <!--#if expr="false" -->
+        <div class="error">
+          <p>Ошибка</p>
+          <p>Запускайте этот сценарий с помощью веб-сервера, поддерживающего
+          SSI. Для Apache нужно включить модули mod_cgi и mod_include, а также
+          задать следующие директивы</p>
+          <code class="codeblock">
+            &lt;Directory &quot;/var/www/html&quot;&gt;<br/>
+            &nbsp;&nbsp;AddType text/html .shtml<br/>
+            &nbsp;&nbsp;AddOutputFilter INCLUDES .shtml<br/>
+            &nbsp;&nbsp;Options -IncludesNoExec +Includes<br/>
+            &lt;/Directory&gt;<br/>
+          </code>
+        </div>
+      <!--#endif -->
+      <div class="data">
+        <!--#include file="stickers_generated.shtml" -->
+      </div>
+    </main>
+    <footer>
+      <p>Поисковая система стикеров в Telegram. Распространяется на условиях
+      AGPL. Исходный код доступен на <a
+      href="https://github.com/mymedia2/steeqbot">GitHub</a>.</p>
+    </footer>
+  </body>
+</html>
