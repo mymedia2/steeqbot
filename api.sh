@@ -25,7 +25,7 @@
 set -o errexit pipefail
 
 # Внутренние объекты для реализации постоянного соединения.
-_tg_socket_file="/var/tmp/$0-$$.socket"
+_tg_socket_file="/var/tmp/$$.socket"
 coproc _tg_tls_service {
   while true; do
     openssl s_client -quiet -connect "api.telegram.org:443" \

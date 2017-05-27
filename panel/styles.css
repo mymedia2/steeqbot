@@ -11,17 +11,26 @@
   margin-top: 0px;
 }
 
+.data {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
 figure {
-  display: inline-block;
   margin: 5px;
 }
-.sticker img {
-  display: inline-block;
-  height: 120px;
+.sticker {
+  height: 128px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
 }
-.sticker img, .edit-form input, .edit-form textarea {
+.sticker img {
+  max-width: 128px;
+}
+.edit-form input, .edit-form textarea {
   box-sizing: border-box;
-  width: 120px;
+  width: 128px;
 }
 
 .detele-form {
