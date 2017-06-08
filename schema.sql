@@ -51,12 +51,6 @@ BEGIN
   SELECT CASE WHEN changes() > 0 THEN RAISE (IGNORE) END;
 END;
 
-/* Доступные стикеры, известные боту (представление пока не используется) */
-CREATE VIEW stickers AS
-WITH t AS (SELECT DISTINCT file_id, words FROM history)
-SELECT file_id, group_concat(words) AS description
-FROM t WHERE words != '' GROUP BY file_id;
-
 /* Пользователи, которые в текущий момент собираются дать описание стикера */
 CREATE TABLE states (
     user_id INTEGER NOT NULL PRIMARY KEY
@@ -64,7 +58,20 @@ CREATE TABLE states (
   , last_activity_time INTEGER NOT NULL DEFAULT ( strftime('%s', 'now') )
 );
 
+/* Стикеры с описаниями. Одному стикеру разрешается давать разные описания.
+ * Описания могут содержать только пробелы, буквы, цифры или вот такие знаки
+ * +-!?№#@ */
+CREATE TABLE stickers (
+    file_id TEXT NOT NULL
+  , description TEXT NOT NULL
+);
+
+/* Представление для создания файла stickers_generated.shtml */
 CREATE VIEW stickers_shtml AS
-SELECT printf('<!--#set var="sticker_id" value="%s" var="tags" value="%s" -->
-  <!--#include file="sticker_template.shtml" -->', file_id, description)
-FROM stickers;
+SELECT printf(
+  '<!--#set var="sticker_id" value="%s" var="tags" value="%s"
+       --><!--#include file="%s" -->',
+  file_id, group_concat(description), 'sticker_template.shtml'
+)
+FROM stickers
+GROUP BY file_id;
