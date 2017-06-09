@@ -33,11 +33,38 @@ figure {
   width: 128px;
 }
 
-.detele-form {
+.delete-form {
   position: relative;
 }
-.detele-form input {
+.delete-form input {
   position: absolute;
   bottom: 100%;
   right: 0px;
+  opacity: 0;
+}
+.delete-form input:hover, .delete-form input:focus {
+  opacity: 1;
+}
+
+figure {
+  position: relative;
+}
+.veil {
+  position: absolute;
+  top: 0px;
+  height: 100%;
+  width: 100%;
+
+  display: flex;
+  text-align: center;
+  align-items: center;
+
+  background: white;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 300ms ease-out;
+}
+.veil.shown {
+  visibility: visible;
+  opacity: 0.8;
 }

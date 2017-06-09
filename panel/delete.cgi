@@ -27,7 +27,9 @@ file_id=$(echo "${QUERY_STRING}" | sed 's/^file_id=//')
 
 sql::query "DELETE FROM stickers WHERE file_id = '${file_id}'"
 
-echo "Location: ${HTTP_REFERER}"
+if [ "${HTTP_X_REQUESTED_WITH}" != XMLHttpRequest ]; then
+  echo -e "Status: 303\nLocation: ${HTTP_REFERER}"
+fi
 echo -e "Content-Type: text/plain\n"
 echo -n "ok"
 

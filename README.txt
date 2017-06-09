@@ -3,4 +3,10 @@
 Запуск командой ./robot.sh, предварительно нужно выставить переменные окружения
 BOT_TOKEN и DB_FILENAME.
 
-Зависимости (пакеты Debian): jshon netcat-openbsd curl openssl sqlite3
+Зависимости (пакеты Debian):
+ curl
+ jshon
+ libjs-jquery
+ netcat-openbsd
+ openssl
+ sqlite3

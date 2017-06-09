@@ -4,7 +4,8 @@
          alt="<!--#echo var="tags" -->"/>
   </div>
   <figcaption>
-    <form class="detele-form" method="POST"
+    <form class="delete-form" method="POST"
+          data-file-id="<!--#echo var="sticker_id" -->"
           action="delete.cgi?file_id=<!--#echo var="sticker_id" -->">
       <input type="submit" value="x"/>
     </form>
@@ -13,4 +14,5 @@
       <input name="tags" value="<!--#echo var="tags" -->"/>
     </form>
   </figcaption>
+  <div class="veil" id="veil-<!--#echo var="sticker_id" -->"></div>
 </figure>
