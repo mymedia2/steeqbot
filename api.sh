@@ -38,7 +38,7 @@ coproc _tg_socket_proxy {
   done
 }
 function _tg_atexit {
-    kill "${_tg_socket_proxy_PID}" "${_tg_tls_service_PID}"
+    kill -s SIGTERM "-${_tg_socket_proxy_PID}" "-${_tg_tls_service_PID}"
     rm -f "${_tg_socket_file}"
 }
 trap _tg_atexit EXIT
@@ -65,6 +65,10 @@ function tg::api_call {
     params+=("--data-urlencode" "${par}")
   done
 
+  if [ -n "${DEBUG}" ]; then
+    echo "API call: $@" >&2
+  fi
+
   local data=$(curl --unix-socket "${_tg_socket_file}" --silent --show-error \
     "${url}" "${params[@]}")
 
@@ -74,8 +78,13 @@ function tg::api_call {
   elif [ -n "${DEBUG}" ]; then
     local code=$(echo "${data}" | jshon -e error_code)
     local desc=$(echo "${data}" | jshon -e description -u)
-    echo "Error ${code}: ${desc}" >&2
-    return "${code}"
+    if [ -n "${code}" ]; then
+      echo "Error ${code}: ${desc}" >&2
+      return "${code}"
+    else
+      echo "${data}" >&2
+      return -1
+    fi
   fi
 }
 

@@ -14,15 +14,15 @@
     <main>
       <!--#if expr="false" -->
         <div class="error">
-          <p>Ошибка</p>
+          <h4>Ошибка</h4>
           <p>Запускайте этот сценарий с помощью веб-сервера, поддерживающего
           SSI. Для Apache нужно включить модули mod_cgi и mod_include, а также
           задать следующие директивы</p>
-          <code class="codeblock">
-            &nbsp;&nbsp;AddType text/html .shtml<br/>
-            &nbsp;&nbsp;AddOutputFilter INCLUDES .shtml<br/>
-            &nbsp;&nbsp;Options -IncludesNoExec +Includes<br/>
-          </code>
+          <p><code>
+            AddOutputFilter INCLUDES .shtml<br/>
+            AddHandler cgi-script .cgi<br/>
+            Options +Includes +ExecCGI<br/>
+          </code></p>
         </div>
       <!--#endif -->
       <div class="data">

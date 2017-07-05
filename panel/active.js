@@ -25,8 +25,8 @@ $(function() {
    * методом, кодируя данные указанным в атрибуте enctype способом. Работают
    * только два кодирования: application/x-www-form-urlencoded — обычная
    * стандартная отправка и text/plain — отправляется значение только первого
-   * поля как простой текст. Эта функция всегда возвращает ложь для отмены
-   * отправки средствами веб-обозревателя. В случае успешного ответа сервера
+   * поля как простой текст. Эта функция всегда отменяет стандартные действия
+   * веб-обозревателя для отправки формы. В случае успешного ответа сервера
    * вызывается функция event.data (если поле задано), в качестве её объекта она
    * получает текущий объект настоящей функции, первый параметр будет строкой от
    * сервера. */
@@ -37,8 +37,8 @@ $(function() {
       var inputData = $(this).find("input, textarea, select").val();
     }
     $.ajax({ url: this.action, method: this.method, contentType: this.enctype,
-             data: inputData, success: event.data && event.data.bind(this) });
-    return false;
+             data: inputData, success: event.data, context: this });
+    event.preventDefault();
   }
 
   $(".delete-form").submit(function() {

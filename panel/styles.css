@@ -1,14 +1,7 @@
-.codeblock {
-  display: inline-block;
-}
 .error {
   background: #f2dede;
   border-radius: 5px;
   padding: 7px;
-}
-.error :first-child {
-  font-weight: bold;
-  margin-top: 0px;
 }
 
 .data {
@@ -22,10 +15,13 @@ figure {
 .sticker {
   height: 128px;
   display: flex;
+  justify-content: center;
   align-items: center;
+  text-align: center;  /* выравнивает подписи незагруженных картинок */
   margin-bottom: 5px;
 }
 .sticker img {
+  max-height: 128px;
   max-width: 128px;
 }
 .edit-form input, .edit-form textarea {
@@ -42,6 +38,7 @@ figure {
   right: 0px;
   opacity: 0;
 }
+.sticker:hover ~* .delete-form input,
 .delete-form input:hover, .delete-form input:focus {
   opacity: 1;
 }
