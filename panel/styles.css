@@ -19,6 +19,7 @@ figure {
   align-items: center;
   text-align: center;  /* выравнивает подписи незагруженных картинок */
   margin-bottom: 5px;
+  overflow: hidden;  /* слишком длинные описания будут обрезаться */
 }
 .sticker img {
   max-height: 128px;

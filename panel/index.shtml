@@ -26,7 +26,14 @@
         </div>
       <!--#endif -->
       <div class="data">
-        <!--#include file="stickers_generated.shtml" -->
+        <!--#exec cgi="stickers.cgi" -->
+      </div>
+      <div class="paginator">
+        <a href="?page=<!--#exec cmd=`bash -c '
+           let res="\${QUERY_STRING/^page=/}+1"
+           echo -n "\${res/[^0-9]/}"'` -->" id="next-link">
+          Перейти к продолжению
+        </a>
       </div>
     </main>
     <footer>

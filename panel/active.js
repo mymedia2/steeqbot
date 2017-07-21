@@ -40,7 +40,6 @@ $(function() {
              data: inputData, success: event.data, context: this });
     event.preventDefault();
   }
-
   $(".delete-form").submit(function() {
     /* чтобы скрыть кнопку после успешного удаления, снимаем с неё фокус */
     $(this).find("input").blur();
@@ -49,4 +48,23 @@ $(function() {
   /* событие change всё равно вызывается при попытке отправить форму, поэтому
    * повторная попытка отправки по нажатию клавиши ВВОД блокируется. */
   $(".edit-form").submit(false).change(sendForm);
+
+  function downloadNextPage() {
+    var query = $("#next-link").attr("href");
+    var next_page = parseInt(/[0-9]+/.exec(query)[0]) + 1;
+    $.ajax("stickers.cgi" + query)
+      .done(function(result) {
+        $(".data").append(result);
+        $("#next-link").attr("href", "?page=" + next_page);
+      });
+  }
+  $("#next-link").click(function(event) {
+    downloadNextPage();
+    event.preventDefault();
+  });
+  $(document).scroll(function() {
+    if ($(window).height() + $(document).scrollTop() >= $(document).height()) {
+      downloadNextPage();
+    }
+  });
 });
