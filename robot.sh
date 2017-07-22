@@ -20,14 +20,9 @@
 
 # Точка входа для бота. Запускать этот файл. Подробнее в README.
 
-set -o errexit pipefail
+set -o errexit -o pipefail
 source api.sh
 source database.sh
-
-function process_message {
-  # TODO: сделать, чтобы start_bot не вызывала эту функцию
-  : pass
-}
 
 function process_start_command {
   local chat=$(jshon -e chat -e id)
@@ -37,8 +32,8 @@ function process_start_command {
 а затем введи cвой запрос."
   local kbd='{"inline_keyboard":[[
     {"text":"↪️ Опробовать...","switch_inline_query":""} ]]}'
-  tg::api_call sendMessage text="${msg}" chat_id="${chat}" \
-    reply_markup="${kbd}" >/dev/null
+  tg::emit_call sendMessage text="${msg}" chat_id="${chat}" \
+    reply_markup="${kbd}"
 }
 
 function process_help_command {
@@ -51,7 +46,7 @@ function process_help_command {
 проиндексирую.
 Кроме того, я представляю из себя свободное ПО, и мой код доступен на условиях \
 GNU/AGPL github.com/mymedia2/steeqbot"
-  tg::api_call sendMessage text="${msg}" chat_id="${chat}" >/dev/null
+  tg::emit_call sendMessage text="${msg}" chat_id="${chat}"
 }
 
 function process_sticker {
@@ -74,8 +69,8 @@ function process_sticker {
     else
       local msg="О! А этот стикер я уже знаю 😃"
     fi
-    tg::api_call sendMessage text="${msg}" chat_id="${user_id}" \
-      reply_markup='{"force_reply":true}' >/dev/null
+    tg::emit_call sendMessage text="${msg}" chat_id="${user_id}" \
+      reply_markup='{"force_reply":true}'
     sql::query "INSERT INTO history (user_id, file_id, sendings_tally)
                 VALUES (${user_id}, ${file_id}, 0);
                 REPLACE INTO states (user_id, file_id)
@@ -104,8 +99,8 @@ function process_inline_query {
     LIMIT 50" \
       | sed 's/.*/{"type":"sticker","id":"\0","sticker_file_id":"\0"}/
              2~1s/.*/,\0/')]
-  tg::api_call answerInlineQuery inline_query_id="${query_id}" \
-    results="${stickers_json}" cache_time=1 is_personal=true >/dev/null
+  tg::emit_call answerInlineQuery inline_query_id="${query_id}" \
+    results="${stickers_json}" cache_time=600 is_personal=true
 }
 
 function process_chosen_inline_result {
@@ -126,10 +121,10 @@ function process_text {
     SELECT file_id FROM history WHERE words LIKE \"%${pattern,,}%\"
     ORDER BY user_id != ${user_id}, sendings_tally DESC LIMIT 1")
   if [ -z "${file_id}" ]; then
-    tg::api_call sendMessage chat_id="${user_id}" \
-      text="К сожалению, по этому запросу ничего не нашлось 😔" >/dev/null
+    tg::emit_call sendMessage chat_id="${user_id}" \
+      text="К сожалению, по этому запросу ничего не нашлось 😔"
   else
-    tg::api_call sendSticker chat_id="${user_id}" sticker="${file_id}" >/dev/null
+    tg::emit_call sendSticker chat_id="${user_id}" sticker="${file_id}"
   fi
 }
 
@@ -153,10 +148,18 @@ function process_reply {
         (SELECT file_id FROM states WHERE user_id = ${user_id}))" || res=false
     fi
     if [ "${res}" = true ]; then
-      tg::api_call sendMessage text="Понятно 🙂" chat_id="${user_id}" >/dev/null
+      tg::emit_call sendMessage text="Понятно 🙂" chat_id="${user_id}"
     fi
   fi
 }
 
-tg::start_bot "message,inline_query,chosen_inline_result" "start,help" \
-  "text,sticker,reply"
+valid_updates="message,inline_query,chosen_inline_result"
+if [ "$1" = "--set-webhook" ]; then
+  tg::initialize_webhook "${valid_updates}" "$2" "$3"
+elif [ "${REQUEST_METHOD}" != GET ]; then
+  tg::route_update "${valid_updates}" "start,help" "text,sticker,reply"
+else
+  # проверка работоспособности
+  echo -e "Content-Type: text/plain\n"
+  echo -n "steeqbot works"
+fi

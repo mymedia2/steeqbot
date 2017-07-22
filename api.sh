@@ -22,29 +22,9 @@
 # публичные фукнции: tg::api_call и tg::start_bot. Для работы должна быть
 # установлена переменная окружения BOT_TOKEN.
 
-set -o errexit pipefail
+set -o errexit -o pipefail
 
-# Внутренние объекты для реализации постоянного соединения.
-_tg_socket_file="/var/tmp/$0-$$.socket"
-coproc _tg_tls_service {
-  while true; do
-    openssl s_client -quiet -connect "api.telegram.org:443" \
-      -servername "api.telegram.org" 2>/dev/null
-  done
-}
-coproc _tg_socket_proxy {
-  while true; do
-    nc -lU "${_tg_socket_file}" <&${_tg_tls_service[0]} >&${_tg_tls_service[1]}
-  done
-}
-function _tg_atexit {
-    kill "${_tg_socket_proxy_PID}" "${_tg_tls_service_PID}"
-    rm -f "${_tg_socket_file}"
-}
-trap _tg_atexit EXIT
-
-# Вызывает метод Telegram API, используя уже установленное постоянное
-# HTTPS-соединение с сервером.
+# Вызывает метод Telegram Bot API
 #
 # Параметры:
 #   $1   ~ имя метода, обязательный
@@ -58,15 +38,14 @@ trap _tg_atexit EXIT
 #   tg::api_call sendMessage text="Hello world!" chat_id=42 >/dev/null
 #
 function tg::api_call {
-  local url="http://api.telegram.org/bot${BOT_TOKEN}/$1"
+  local url="https://api.telegram.org/bot${BOT_TOKEN}/$1"
   declare -a params
 
   for par in "${@:2}"; do
     params+=("--data-urlencode" "${par}")
   done
 
-  local data=$(curl --unix-socket "${_tg_socket_file}" --silent --show-error \
-    "${url}" "${params[@]}")
+  local data=$(curl --silent --show-error "${url}" "${params[@]}")
 
   local status=$(echo "${data}" | jshon -e ok)
   if [ "${status}" = "true" ]; then
@@ -79,10 +58,32 @@ function tg::api_call {
   fi
 }
 
+# Отправляет запрос к телеграм, посредством CGI. Команды этого протокола просто
+# печатаются на stdout, чтобы их обработал веб-сервер. Вызвать функцию следует
+# не более одного раза.
+#
+# Параметры:
+#   $1   ~ имя метода, обязательный
+#   ост. ~ последовательность аргументов вида 'имя=значение'
+#
+# Интерфейс этой функции аналогичен как у tg::api_call за тем исключением, что
+# результат не печатается, т.к. Telegram попросту не возвращает его.
+#
+function tg::emit_call {
+  declare -a params
+  for par in "=$1" "${@:2}"; do
+    local name="${par/=*}"
+    local value="${par/*=}"
+    params+=(-s "${value}" -i "${name:-method}")
+  done
+  echo -e "Content-Type: application/json\n"
+  jshon -Q -n object "${params[@]}"
+}
+
 # Запускает обработку входящих сообщений. Вызывает функции с названием вида
 # process_* в соответствии с принятым типом сообщения и заданными параметрами.
 # Всем функциям на стандартный ввод подаётся запрашиваемый объект обновления.
-# Каждое сообщение обрабатывается лишь единожды. Управление не возвращается.
+# Одно сообщение обрабатывается только единожды.
 #
 # Параметры:
 #   $1 ~ Список обрабатываемых типов обновлений через запятую. Возможные типы:
@@ -98,48 +99,70 @@ function tg::api_call {
 #        location, venue, reply, service (пока не реализовано). При получении
 #        указанного сообщения вызывается функция process_тип.
 #
-function tg::start_bot {
-  local supported_updates_types=$(echo "${1:-messages}" \
-    | sed 's/^\s*/["/;s/\s*,\s*/","/g;s/\s*$/"]/')
-  local supported_commands_list=$(echo "$2" \
-    | sed 's/^\s*/(/;s/\s*,\s*/|/g;s/\s*$/)/')
-  local supported_message_types=$(echo "$3" \
-    | sed 's/^\s*/^(/;s/\s*,\s*/|/g;s/\s*$/)$/')
+function tg::route_update {
+  local supported_updates_types="${1:-messages}"
+  local supported_commands_list="$2"
+  local supported_message_types="$3"
 
-  if [ -n "${DEBUG}" ]; then
-    local myname=@$(tg::api_call getMe | jshon -e username -u)
-    echo $(date -Iseconds) "Бот ${myname} запущен" >&2
+  # вывод первого заголовка на случай, если не будет отправлено никаких запросов
+  echo "Status: 200"
+
+  local update=$(cat)
+  local incoming=$(echo "${update}" | jshon -k | grep -v update_id)
+  if echo "${incoming}" | egrep -q "${supported_updates_types//,/|}"; then
+    local cInput=$(echo "${update}" \
+      | jshon -Q -e message -e text -u \
+      | sed -rnz '\!^/'"${supported_commands_list//,/|}"'\>!{s,/(\w*).*,\1,;p}')
+    local content_type=$(echo "${update}" \
+      | jshon -Q -e message -k \
+      | egrep "${supported_message_types//,/|}")
+
+    if [ -n "${cInput}" ]; then  # обработка команд
+      local function_name="process_${cInput}_command"
+    elif echo "${update}" \
+        | jshon -Q -e message -e reply_to_message >/dev/null &&
+        [[ "$3" =~ "reply" ]]; then  # обработка ответов
+      local function_name="process_reply"
+    elif [ -n "${content_type}" ]; then  # обработка сообщений по типу
+      local function_name="process_${content_type}"
+    else  # обработка прочих обновлений
+      local function_name="process_${incoming}"
+    fi
+
+    # функция вызыывается только если он объявлена
+    # TODO: подумать над лучшим решением
+    if compgen -A function | grep -q "${function_name}"; then
+      echo "${update}" | jshon -e "${incoming}" | "${function_name}"
+    fi
   fi
 
-  local next_update_id=0
-  while true; do
-    local updates=$(tg::api_call getUpdates offset="${next_update_id}" \
-      timeout=100 allowed_updates="${supported_updates_types}")
-    local incoming_updates=$(echo "${updates}" | jshon -l)
-    for (( i = 0; i < incoming_updates; i++ )); do
-      local cInput=$(echo "${updates}" \
-        | jshon -Q -e $i -e message -e text -u \
-        | sed -rnz '\!^/\<'"${supported_commands_list}"'\>!{s,/(\w*).*,\1,;p}')
-      local content_type=$(echo "${updates}" \
-        | jshon -Q -e $i -e message -k \
-        | egrep "${supported_message_types}")
-      local incoming=$(echo "${updates}" | jshon -e $i -k | grep -v update_id)
+  # завершение вывода CGI заголовков; если был отправлен запрос, это не помешает
+  echo
+}
 
-      if [ -n "${cInput}" ]; then  # обработка команд
-        local function_name="process_${cInput}_command"
-      elif echo "${updates}" \
-          | jshon -Q -e $i -e message -e reply_to_message >/dev/null &&
-          [[ "$3" =~ "reply" ]]; then  # обработка ответов
-        local function_name="process_reply"
-      elif [ -n "${content_type}" ]; then  # обработка сообщений по типу
-        local function_name="process_${content_type}"
-      else  # обработка прочих обновлений
-        local function_name="process_${incoming}"
-      fi
-      echo "${updates}" | jshon -e $i -e "${incoming}" | "${function_name}"
-      let next_update_id=$(echo "${updates}" | jshon -e $i -e update_id)+1
-    done
-  done
+# Устанавливает webhook для приёма входящих обновлений. Завершает работу
+# сценария, если сервер недоступен.
+#
+# Параметры:
+#   $1 ~ Допустимые обновления через запятую
+#   $2 ~ Адрес домена где расположен бот
+#   $3 ~ Защитная часть URL, добавляется в конец
+#
+function tg::initialize_webhook {
+  local updates="$1"
+  local domain="$2"
+  local hash="$3"
+
+  local address="https://${domain}/webhook/${hash}"
+  local updates_json="[\"${updates//,/\",\"}\"]"
+
+  if curl --silent --show-error "${address}" | grep -q "steeqbot works"; then
+    tg::api_call setWebhook url="${address}" allowed_updates="${updates_json}" \
+      >/dev/null
+  else
+    echo "Проблемы с веб-сервером: ${address}" >&2
+    exit 1
+  fi
 }
 
 if [ -z "${BOT_TOKEN}" ]; then
