@@ -36,6 +36,8 @@ set -e
 #
 function sql::query {
   if [ -n "${DEBUG}" ]; then
+    # Позволяет замену множества пробелов на один.
+    # shellcheck disable=SC2086
     echo $1\; >&2
   fi
   sqlite3 "${DB_FILENAME}" "$1"

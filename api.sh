@@ -45,14 +45,16 @@ function tg::api_call {
     params+=("--data-urlencode" "${par}")
   done
 
-  local data=$(curl --silent --show-error "${url}" "${params[@]}")
+  local data status
+  data=$(curl --silent --show-error "${url}" "${params[@]}")
 
-  local status=$(echo "${data}" | jshon -e ok)
+  status=$(jshon -e ok <<< "${data}")
   if [ "${status}" = "true" ]; then
-    echo "${data}" | jshon -e result
+    jshon -e result <<< "${data}"
   elif [ -n "${DEBUG}" ]; then
-    local code=$(echo "${data}" | jshon -e error_code)
-    local desc=$(echo "${data}" | jshon -e description -u)
+    local code desc
+    code=$(jshon -e error_code <<< "${data}")
+    desc=$(jshon -e description -u <<< "${data}")
     echo "Error ${code}: ${desc}" >&2
     return "${code}"
   fi
@@ -110,20 +112,20 @@ function tg::route_update {
   # вывод первого заголовка на случай, если не будет отправлено никаких запросов
   echo "Status: 200"
 
-  local update=$(cat)
-  local incoming=$(echo "${update}" | jshon -k | grep -v update_id)
-  if echo "${incoming}" | egrep -q "${supported_updates_types//,/|}"; then
-    local cInput=$(echo "${update}" \
-      | jshon -Q -e message -e text -u \
-      | sed -rnz '\!^/'"${supported_commands_list//,/|}"'\>!{s,/(\w*).*,\1,;p}')
-    local content_type=$(echo "${update}" \
-      | jshon -Q -e message -k \
-      | egrep "${supported_message_types//,/|}")
+  local update incoming
+  update=$(cat)
+  incoming=$(jshon -k <<< "${update}" | grep -v update_id)
+  if grep -Eq "${supported_updates_types//,/|}" <<< "${incoming}"; then
+    local cInput content_type
+    cInput=$(jshon -Q -e message -e text -u <<< "${update}" \
+      | sed -rnz '\!^/'"${supported_commands_list//,/|}"'\>!{s,/(\w*).*,\1,;p}' \
+        || true)
+    content_type=$(jshon -Q -e message -k <<< "${update}" \
+      | grep -E "${supported_message_types//,/|}" || true)
 
     if [ -n "${cInput}" ]; then  # обработка команд
       local function_name="process_${cInput}_command"
-    elif echo "${update}" \
-        | jshon -Q -e message -e reply_to_message >/dev/null &&
+    elif jshon -Q -e message -e reply_to_message <<< "${update}" >/dev/null &&
         [[ "$3" =~ "reply" ]]; then  # обработка ответов
       local function_name="process_reply"
     elif [ -n "${content_type}" ]; then  # обработка сообщений по типу
@@ -135,7 +137,7 @@ function tg::route_update {
     # функция вызыывается только если он объявлена
     # TODO: подумать над лучшим решением
     if compgen -A function | grep -q "${function_name}"; then
-      echo "${update}" | jshon -e "${incoming}" | "${function_name}"
+      jshon -e "${incoming}" <<< "${update}" | "${function_name}"
     fi
   fi
 

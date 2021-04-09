@@ -25,7 +25,8 @@ source api.sh
 source database.sh
 
 function process_start_command {
-  local chat=$(jshon -e chat -e id)
+  local chat
+  chat=$(jshon -e chat -e id)
   local msg="\
 Привет! Я могу помочь найти тебе подходящий стикер именно в тот момент, когда \
 он очень нужен. Чтобы вызвать меня, просто набери моё имя в строке сообщения, \
@@ -37,7 +38,8 @@ function process_start_command {
 }
 
 function process_help_command {
-  local chat=$(jshon -e from -e id)
+  local chat
+  chat=$(jshon -e from -e id)
   local msg="\
 Я – бот-помощник в поиске стикеров. Просто напиши мне, какой стикер тебя \
 интересует, и я попытаюсь найти его. Но помни, пока мне известно очень мало \
@@ -50,10 +52,11 @@ GNU/AGPL github.com/mymedia2/steeqbot"
 }
 
 function process_sticker {
-  local message=$(cat)
-  local user_id=$(echo "${message}" | jshon -e from -e id)
-  local file_id=$(echo "${message}" | jshon -e sticker -e file_id)
-  if echo "${message}" | jshon -e chat -e type | grep -q private; then
+  local message user_id file_id
+  message=$(cat)
+  user_id=$(jshon -e from -e id <<< "${message}")
+  file_id=$(jshon -e sticker -e file_id <<< "${message}")
+  if jshon -e chat -e type <<< "${message}" | grep -q private; then
     if sql::query "SELECT count(*) FROM history WHERE file_id = ${file_id}" \
         | grep -q 0; then
       if (( RANDOM % 2 )); then
@@ -82,17 +85,18 @@ function process_sticker {
 }
 
 function process_inline_query {
-  local update=$(cat)
-  local query_id=$(echo "${update}" | jshon -e id -u)
-  local user_id=$(echo "${update}" | jshon -e from -e id)
-  local pattern=$(echo "${update}" | jshon -e query -u | sed 's/"/""/g')
-  local stickers_json=[$(sql::query "
+  local update query_id user_id pattern stickers_json
+  update=$(cat)
+  query_id=$(jshon -e id -u <<< "${update}")
+  user_id=$(jshon -e from -e id <<< "${update}")
+  pattern=$(jshon -e query -u <<< "${update}" | sed 's/"/""/g')
+  stickers_json=[$(sql::query "
     WITH r AS (SELECT *, user_id != ${user_id} AS owner_flag, 1 AS category
                FROM history WHERE words LIKE \"%${pattern,,}%\"
                ORDER BY owner_flag DESC, sendings_tally DESC),
          m AS (SELECT *, 0 AS category FROM history
                WHERE file_id NOT IN (SELECT file_id FROM history WHERE words != '')
-                 AND '${pattern}' != ''
+                 AND $(sql::to_literal <<< "${pattern}") != ''
                ORDER BY sendings_tally DESC
                LIMIT (SELECT count(*) FROM r) / 3)
     SELECT DISTINCT file_id FROM r UNION ALL SELECT DISTINCT file_id FROM m
@@ -104,20 +108,22 @@ function process_inline_query {
 }
 
 function process_chosen_inline_result {
-  local result=$(cat)
-  local file_id=$(echo "${result}" | jshon -e result_id)
-  local user_id=$(echo "${result}" | jshon -e from -e id)
-  local words=$(echo "${result}" | jshon -e query -u | sql::to_literal)
+  local result user_id file_id words
+  result=$(cat)
+  file_id=$(jshon -e result_id <<< "${result}")
+  user_id=$(jshon -e from -e id <<< "${result}")
+  words=$(jshon -e query -u  <<< "${result}" | sql::to_literal)
   sql::query "INSERT INTO history (user_id, file_id, words)
               VALUES (${user_id}, ${file_id}, ${words,,})"
 }
 
 function process_text {
-  local query=$(cat)
-  echo "${query}" | jshon -e chat -e type | grep -q private || return 0
-  local user_id=$(echo "${query}" | jshon -e from -e id)
-  local pattern=$(echo "${query}" | jshon -e text -u | sed 's/"/""/g')
-  local file_id=$(sql::query "
+  local query user_id file_id pattern
+  query=$(cat)
+  jshon -e chat -e type <<< "${query}" | grep -q private || return 0
+  user_id=$(jshon -e from -e id <<< "${query}")
+  pattern=$(jshon -e text -u <<< "${query}" | sed "s/\"/\"\"/g;s/'/''/g")
+  file_id=$(sql::query "
     SELECT file_id FROM history WHERE words LIKE \"%${pattern,,}%\"
     ORDER BY user_id != ${user_id}, sendings_tally DESC LIMIT 1")
   if [ -z "${file_id}" ]; then
@@ -129,12 +135,13 @@ function process_text {
 }
 
 function process_reply {
-  local data=$(cat)
-  echo "${data}" | jshon -e chat -e type | grep -q private || return 0
-  local user_id=$(echo "${data}" | jshon -e from -e id)
-  local description=$(echo "${data}" | jshon -e text)
-  local file_id=$(echo "${data}" \
-    | jshon -Q -e reply_to_message -e sticker -e file_id)
+  local data user_id file_id description
+  data=$(cat)
+  jshon -e chat -e type <<< "${data}" | grep -q private || return 0
+  user_id=$(jshon -e from -e id <<< "${data}")
+  description=$(jshon -e text <<< "${data}" || true)
+  file_id=$(jshon -Q -e reply_to_message -e sticker -e file_id <<< "${data}" \
+    || true)
   if [ -n "${description}" ]; then
     local res=true
     if [ -n "${file_id}" ]; then
