@@ -101,8 +101,8 @@ function process_inline_query {
                LIMIT (SELECT count(*) FROM r) / 3)
     SELECT DISTINCT file_id FROM r UNION ALL SELECT DISTINCT file_id FROM m
     LIMIT 50" \
-      | sed 's/.*/{"type":"sticker","id":"\0","sticker_file_id":"\0"}/
-             2~1s/.*/,\0/')]
+      | sed -E 's/(.{,64}).*/{"type":"sticker","id":"\1","sticker_file_id":"\0"}/
+                2~1s/.*/,\0/')]
   tg::emit_call answerInlineQuery inline_query_id="${query_id}" \
     results="${stickers_json}" cache_time=600 is_personal=true
 }
