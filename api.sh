@@ -169,8 +169,3 @@ function tg::initialize_webhook {
     exit 1
   fi
 }
-
-if [ -z "${BOT_TOKEN}" ]; then
-  echo "Не задан ключ доступа к Telegram API" >&2
-  exit 1
-fi

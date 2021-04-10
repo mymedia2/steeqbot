@@ -54,10 +54,7 @@ function sql::to_literal {
   sed "s/'/''/g;s/^/'/;s/$/'/"
 }
 
-if [ -z "${DB_FILENAME}" ]; then
-  echo "Не задан путь к базе данных" >&2
-  exit 1
-elif [ ! -f "${DB_FILENAME}" ]; then
+if [ -n "${DB_FILENAME}" ] && ! [ -f "${DB_FILENAME}" ]; then
   sqlite3 "${DB_FILENAME}" <schema.sql
   echo "Создана новая база данных: ${DB_FILENAME}" >&2
 fi
