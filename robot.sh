@@ -107,16 +107,6 @@ function process_inline_query {
     results="${stickers_json}" cache_time=600 is_personal=true
 }
 
-function process_chosen_inline_result {
-  local result user_id file_id words
-  result=$(cat)
-  file_id=$(jshon -e result_id <<< "${result}")
-  user_id=$(jshon -e from -e id <<< "${result}")
-  words=$(jshon -e query -u  <<< "${result}" | sql::to_literal)
-  sql::query "INSERT INTO history (user_id, file_id, words)
-              VALUES (${user_id}, ${file_id}, ${words,,})"
-}
-
 function process_text {
   local query user_id file_id pattern
   query=$(cat)
@@ -160,7 +150,7 @@ function process_reply {
   fi
 }
 
-valid_updates="message,inline_query,chosen_inline_result"
+valid_updates="message,inline_query"
 if [ "$1" = "--set-webhook" ]; then
   tg::initialize_webhook "${valid_updates}" "$2" "$3"
 elif [ "${REQUEST_METHOD}" != GET ]; then
